@@ -4,13 +4,13 @@ from src.models import RetrievedItem, ResponseCacheEntry
 from src.cache import ResponseCache, PROMPT_V
 
 
-# ------------------------------
+
 class Generator:
 
     def __init__(self, cache: ResponseCache) -> None:
         self._cache = cache
 
-    # ------------------------------
+    
     def generate(
         self,
         query: str,

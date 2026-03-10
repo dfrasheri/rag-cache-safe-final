@@ -6,18 +6,18 @@ from src.retrieval import Retriever
 from src.generator import Generator
 
 
-# ------------------------------
+# some logs here so i can see whats goin on
 SEPARATOR = "=" * 60
 
 
-# ------------------------------
+
 def log_step(step: int, title: str) -> None:
     print(f"\n{SEPARATOR}")
     print(f"  STEP {step}: {title}")
     print(SEPARATOR)
 
 
-# ------------------------------
+
 def run_query(
     label: str,
     query: str,
@@ -58,7 +58,7 @@ def run_query(
     print(f"\n  answer:\n{answer}")
 
 
-# ------------------------------
+
 def main() -> None:
     base_dir = os.path.join(os.path.dirname(__file__), "..", "docs", "base")
     updated_dir = os.path.join(os.path.dirname(__file__), "..", "docs", "updated")
@@ -72,7 +72,7 @@ def main() -> None:
     query = "python testing API security"
     filters = {"domain": "engineering", "level": "intermediate"}
 
-    # ------------------------------
+    
     log_step(1, "Load base documents")
     corpus.load_base(base_dir)
     print(f"  Loaded {len(corpus.documents)} documents")
@@ -80,26 +80,26 @@ def main() -> None:
     for doc_id, doc in sorted(corpus.documents.items()):
         print(f"    {doc.doc_id} v{doc.version}")
 
-    # ------------------------------
+    
     log_step(2, "Query Q1 (first time) -> expect MISS / MISS")
     run_query("Q1 first", query, filters, corpus, retriever, generator)
 
-    # ------------------------------
+    
     log_step(3, "Query Q1 (repeat) -> expect HIT / HIT")
     run_query("Q1 repeat", query, filters, corpus, retriever, generator)
 
-    # ------------------------------
+    
     log_step(4, "Apply document updates")
     changes = corpus.apply_updates(updated_dir)
     print(f"  corpus_version : {corpus.corpus_version}")
     for doc_id, old_v, new_v in changes:
         print(f"    {doc_id}: v{old_v} -> v{new_v}")
 
-    # ------------------------------
+    
     log_step(5, "Query Q1 (after update) -> expect MISS / MISS")
     run_query("Q1 after update", query, filters, corpus, retriever, generator)
 
 
-# ------------------------------
+
 if __name__ == "__main__":
     main()

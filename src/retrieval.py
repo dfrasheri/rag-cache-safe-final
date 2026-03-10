@@ -5,14 +5,14 @@ from src.cache import RetrievalCache
 from src.utils import tokenize, compute_context_hash
 
 
-# ------------------------------
+# just doin simple overlap for now i guess
 class Retriever:
 
     def __init__(self, cache: RetrievalCache, top_k: int = 3) -> None:
         self._cache = cache
         self._top_k = top_k
 
-    # ------------------------------
+    
     def retrieve(
         self,
         query: str,
@@ -56,7 +56,7 @@ class Retriever:
         self._cache.put(key, entry)
         return top, key, False
 
-    # ------------------------------
+    
     @staticmethod
     def context_hash_from_items(items: List[RetrievedItem]) -> str:
         tuples = [(it.doc_id, it.version, it.snippet) for it in items]

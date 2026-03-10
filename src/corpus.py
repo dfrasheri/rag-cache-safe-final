@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Tuple
 from src.models import Document
 
 
-# ------------------------------
+# handles the docs n versions
 class CorpusManager:
 
     def __init__(self) -> None:
@@ -20,7 +20,7 @@ class CorpusManager:
     def documents(self) -> Dict[str, Document]:
         return self._docs
 
-    # ------------------------------
+    
     def load_base(self, directory: str) -> None:
         self._docs = {}
         for filename in sorted(os.listdir(directory)):
@@ -33,7 +33,7 @@ class CorpusManager:
             self._docs[doc.doc_id] = doc
         self._corpus_version = 1
 
-    # ------------------------------
+    
     def apply_updates(self, directory: str) -> List[Tuple[str, int, int]]:
         changes: List[Tuple[str, int, int]] = []
         for filename in sorted(os.listdir(directory)):
@@ -55,6 +55,6 @@ class CorpusManager:
             self._corpus_version += 1
         return changes
 
-    # ------------------------------
+    
     def get_doc(self, doc_id: str) -> Optional[Document]:
         return self._docs.get(doc_id)
