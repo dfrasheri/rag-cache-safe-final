@@ -1,73 +1,72 @@
-# RAG Prototype (Caching + Safe Invalidation)
+# RAG Prototype — Caching + Safe Invalidation
 
-Ok so this repo is a small RAG demo and the whole point is simple: **cache the work, but don’t serve old answers when the docs change.**  
-It’s standard library only.
+so this is a small rag demo the whole point is one thing: **cache the work, but dont serve old answers when the docs change**  
+standard library only, no dependencies
 
-## What is caching?
-Caching = I already did the work once (retrieval or generating the answer), so I save the result and reuse it next time instead of recomputing.
+## why two ideas matter
 
-## What is “safe invalidation”?
-Safe invalidation = when the document bundle changes, the old cached stuff is no longer trustworthy, so the system forces a miss and recomputes instead of accidentally returning stale results.
+caching = i already did the retrieval or generation once so i save the result and reuse it next time instead of redoing everything
 
-## What’s inside
-- retrieval step that picks top-k docs for a query
-- a simple generator that formats an answer with citations
-- **two** in-memory caches (retrieval + response)
-- corpus/doc versioning so updates don’t leak stale answers
+safe invalidation = when the docs change, cached stuff from before isnt trustworthy anymore instead of silently returning stale results the system forces a miss and recomputes
 
-## Run it
-```bash
+## whats inside
+
+- retrieval step that picks top k docs for a query
+- simple generator that formats an answer with citations
+- two in memory caches — one for retrieval, one for responses
+- corpus doc versioning so updates dont bleed into old cached answers
+
+## running it
+
+```
 python -m src.main
 ```
 
-## Retrieval cache
-This cache stores the retrieval results for the same query + filters.
+## retrieval cache
+
+stores retrieval results for the same query n filters combo
 
 ```
 key = SHA256( normalize(query) + "|" + canonicalize(filters) )[:12]
 ```
 
-- `normalize(query)` = lowercase + trim + collapse whitespace
-- `canonicalize(filters)` = `json.dumps(filters, sort_keys=True, separators=(",",":"))`
+- normalize(query) = lowercase, trim, collapse whitespace
+- canonicalize(filters) = json.dumps(filters, sort_keys=True, separators=(",",":"))
 
-**Stored value:**
-- list of `(doc_id, version, score, snippet)`
-- plus `corpus_version_at_write`
+stored value is a list of (doc_id, version, score, snippet) plus corpus_version_at_write
 
-**On read:**
-- if `corpus_version_at_write != current_corpus_version` → treat as MISS and delete the entry
+on read: if corpus_version_at_write != current_corpus_version → treat as miss and delete the entry
 
-So: fast when nothing changed, safe when the corpus updates.
+fast when nothing changed. safe when the corpus updates
 
-## Response cache
-This cache stores the final answer, but it’s keyed by the query and the retrieved context, so it can’t reuse an answer from old docs.
+## response cache
+
+stores the final answer but its keyed by the query and the retrieved context — so it cant reuse an answer that came from old docs
 
 ```
 key = SHA256( normalize(query) + "|" + context_hash + "|" + str(PROMPT_V) )[:12]
 ```
 
-- `PROMPT_V = 1`
-- `context_hash` is computed from the retrieved context (sorted tuples of `(doc_id, version, snippet)`)
+- prompt_v = 1
+- context_hash is built from the retrieved context: sorted tuples of (doc_id, version, snippet)
 
-**Stored value:**
-- answer string + citations
+stored value is the answer string n citations
 
-**No explicit invalidation step here:**
-- if docs change, retrieval yields different versions/snippets → `context_hash` changes → new key → natural MISS
+no explicit invalidation needed here — if docs change, retrieval gives different versions or snippets → context_hash changes → new key → natural miss
 
-## Why it doesn’t serve stale answers
-There are two layers of protection:
+## why stale answers dont get served
 
-1. **Corpus version gate (retrieval cache)**  
-   Any doc update bumps `corpus_version`. Retrieval cache entries written under the old version are rejected.
+two layers:
 
-2. **Context-bound response key (response cache)**  
-   The response key includes `(doc_id, version, snippet)` via `context_hash`. If the retrieved context changes, the old response key can’t match.
+1. corpus version gate (retrieval cache) — any doc update bumps corpus_version retrieval entries written under the old version get rejected on read
 
-Even if one layer was somehow bypassed, the other still prevents stale reuse.
+2. context bound response key (response cache) — the response key includes (doc_id, version, snippet) via context_hash if retrieved context shifts at all the old response key wont match
 
-## Demo output (what it proves)
-The demo runs 5 steps:
+if one layer somehow got bypassed the other still catches it
+
+## demo output
+
+5 steps:
 
 | Step | Action | Retrieval | Response |
 |------|--------|-----------|----------|
@@ -77,42 +76,21 @@ The demo runs 5 steps:
 | 4 | Update doc03 + doc07 | — | — |
 | 5 | Query Q1 (after update) | MISS | MISS |
 
-- **Step 2 → 3**: same query, same corpus, same keys → both caches hit.
-- **Step 3 → 5**: `corpus_version` goes 1 → 2, so retrieval cache entry is invalid; fresh retrieval gives a new `context_hash`, so response cache misses too.
+steps 2→3: same query, same corpus, same keys → both caches hit  
+steps 3→5: corpus_version goes 1→2, so the retrieval entry is invalid; fresh retrieval gives a new context_hash, so response cache misses too
 
-Each step prints: `corpus_version`, `retrieval_key`, `context_hash`, `response_key`, and `HIT`/`MISS` labels.
+each step prints: corpus_version, retrieval_key, context_hash, response_key, and hit/miss
 
-## Cost / latency (why this matters)
-In real RAG, generation is the expensive part (LLM calls). This demo keeps generation deterministic, but the same idea applies:
-- **retrieval hit** = skip the search/scoring work
-- **response hit** = skip regeneration (big latency + cost savings in production)
+## why this matters
 
-Caches grow with unique (query, filters) pairs, so you’d cap them in a real service.  
-Also: the two caches are separate on purpose. If you bump `PROMPT_V`, you can force regeneration without throwing away retrieval reuse.
+in real rag, generation is the expensive part — llm calls arent free this demo keeps generation deterministic but the same logic applies: a retrieval hit skips search/scoring work, a response hit skips regeneration entirely (big savings in production)
 
-## Risk + mitigation
-**Risk**: cache poisoning / unbounded growth.  
-If someone floods unique query+filter combos, the caches can grow until memory becomes a problem.
+the caches grow with unique (query, filters) pairs so youd want to cap them in a real service the two caches are intentionally separate — if you bump prompt_v, you force regeneration without throwing away retrieval reuse
 
-**Mitigation**:
-- cap cache size and evict (LRU/oldest)
-- normalize and length-limit queries before hashing
-- optional TTL per entry
+## risk + mitigation
 
-## File structure
-```
-SHFA/
-├── README.md
-├── docs/
-│   ├── base/        (doc01..doc10)
-│   └── updated/     (doc03, doc07)
-└── src/
-    ├── __init__.py
-    ├── main.py
-    ├── models.py
-    ├── corpus.py
-    ├── cache.py
-    ├── retrieval.py
-    ├── generator.py
-    └── utils.py
-```
+flood it with unique query+filter combos and memory becomes a problem mitigations:
+
+- cap cache size, evict with lru or by age
+- normalize + length limit queries before hashing
+- optional ttl per entry
