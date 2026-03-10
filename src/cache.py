@@ -6,7 +6,7 @@ from src.utils import normalize_query, canonicalize_filters, compute_hash
 PROMPT_V: int = 1
 
 
-
+# keepin it in memory for now
 class RetrievalCache:
 
     def __init__(self) -> None:
