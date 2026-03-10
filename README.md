@@ -1,52 +1,118 @@
 # RAG Prototype (Caching + Safe Invalidation)
 
-This repo is a tiny RAG demo built to answer one practical question: **how do you cache RAG safely when the underlying documents change?**
+Ok so this repo is a small RAG demo and the whole point is simple: **cache the work, but don’t serve old answers when the docs change.**  
+It’s standard library only.
 
-It loads a small document set, retrieves the top-k matches for a query, generates a short answer with citations, and then shows how caching behaves **before and after** a doc update.
+## What is caching?
+Caching = I already did the work once (retrieval or generating the answer), so I save the result and reuse it next time instead of recomputing.
 
-## Quick definitions (plain English)
+## What is “safe invalidation”?
+Safe invalidation = when the document bundle changes, the old cached stuff is no longer trustworthy, so the system forces a miss and recomputes instead of accidentally returning stale results.
 
-**Caching**  
-Saving results from work you already did (retrieval or generation) so the next identical request is faster and cheaper.
+## What’s inside
+- retrieval step that picks top-k docs for a query
+- a simple generator that formats an answer with citations
+- **two** in-memory caches (retrieval + response)
+- corpus/doc versioning so updates don’t leak stale answers
 
-**Safe invalidation**  
-Making sure cached results don’t get reused when they’re no longer valid — e.g., when the documents were updated. In other words: *fast, but not wrong.*
-
-## Run
-
+## Run it
 ```bash
 python -m src.main
 ```
 
-## How it works
+## Retrieval cache
+This cache stores the retrieval results for the same query + filters.
 
-The system uses two layers of caching:
+```
+key = SHA256( normalize(query) + "|" + canonicalize(filters) )[:12]
+```
 
-### 1. Retrieval Cache
-Saves the list of documents found for a query.
-- **Key**: `hash(query + filters)`
-- **Safety**: Each entry stores the `corpus_version`. If you update a doc, the `corpus_version` bumps, and the cache knows to ignore old results.
+- `normalize(query)` = lowercase + trim + collapse whitespace
+- `canonicalize(filters)` = `json.dumps(filters, sort_keys=True, separators=(",",":"))`
 
-### 2. Response Cache
-Saves the final answer generated from those documents.
-- **Key**: `hash(query + context_hash + prompt_version)`
-- **Safety**: The `context_hash` is built from the exact text and version of the retrieved docs. If the docs change, the hash changes, which naturally creates a "cache miss" for the response.
+**Stored value:**
+- list of `(doc_id, version, score, snippet)`
+- plus `corpus_version_at_write`
 
-## Why this matters
+**On read:**
+- if `corpus_version_at_write != current_corpus_version` → treat as MISS and delete the entry
 
-In a real system, LLM calls are slow and expensive (~$0.01 - $0.10 and 1-2 seconds per call). Caching saves that cost. However, serving a "stale" answer from a doc that was deleted or edited 5 minutes ago is a common production bug. This prototype demonstrates a simple way to bake that safety into the cache keys themselves.
+So: fast when nothing changed, safe when the corpus updates.
 
-## Risks
+## Response cache
+This cache stores the final answer, but it’s keyed by the query and the retrieved context, so it can’t reuse an answer from old docs.
 
-**Cache Poisoning / Memory Pressure**  
-Since this is an in-memory cache, an attacker (or a very curious user) could flood the system with millions of unique queries, causing the process to run out of RAM.
+```
+key = SHA256( normalize(query) + "|" + context_hash + "|" + str(PROMPT_V) )[:12]
+```
 
-**Mitigation**: In a real app, you'd use a TTL (time-to-live), a max cache size with LRU (Least Recently Used) eviction, or a dedicated store like Redis.
+- `PROMPT_V = 1`
+- `context_hash` is computed from the retrieved context (sorted tuples of `(doc_id, version, snippet)`)
+
+**Stored value:**
+- answer string + citations
+
+**No explicit invalidation step here:**
+- if docs change, retrieval yields different versions/snippets → `context_hash` changes → new key → natural MISS
+
+## Why it doesn’t serve stale answers
+There are two layers of protection:
+
+1. **Corpus version gate (retrieval cache)**  
+   Any doc update bumps `corpus_version`. Retrieval cache entries written under the old version are rejected.
+
+2. **Context-bound response key (response cache)**  
+   The response key includes `(doc_id, version, snippet)` via `context_hash`. If the retrieved context changes, the old response key can’t match.
+
+Even if one layer was somehow bypassed, the other still prevents stale reuse.
+
+## Demo output (what it proves)
+The demo runs 5 steps:
+
+| Step | Action | Retrieval | Response |
+|------|--------|-----------|----------|
+| 1 | Load 10 base docs | — | — |
+| 2 | Query Q1 (first time) | MISS | MISS |
+| 3 | Query Q1 (repeat) | HIT | HIT |
+| 4 | Update doc03 + doc07 | — | — |
+| 5 | Query Q1 (after update) | MISS | MISS |
+
+- **Step 2 → 3**: same query, same corpus, same keys → both caches hit.
+- **Step 3 → 5**: `corpus_version` goes 1 → 2, so retrieval cache entry is invalid; fresh retrieval gives a new `context_hash`, so response cache misses too.
+
+Each step prints: `corpus_version`, `retrieval_key`, `context_hash`, `response_key`, and `HIT`/`MISS` labels.
+
+## Cost / latency (why this matters)
+In real RAG, generation is the expensive part (LLM calls). This demo keeps generation deterministic, but the same idea applies:
+- **retrieval hit** = skip the search/scoring work
+- **response hit** = skip regeneration (big latency + cost savings in production)
+
+Caches grow with unique (query, filters) pairs, so you’d cap them in a real service.  
+Also: the two caches are separate on purpose. If you bump `PROMPT_V`, you can force regeneration without throwing away retrieval reuse.
+
+## Risk + mitigation
+**Risk**: cache poisoning / unbounded growth.  
+If someone floods unique query+filter combos, the caches can grow until memory becomes a problem.
+
+**Mitigation**:
+- cap cache size and evict (LRU/oldest)
+- normalize and length-limit queries before hashing
+- optional TTL per entry
 
 ## File structure
-
-- `src/main.py`: The demo script.
-- `src/cache.py`: The logic for both cache layers.
-- `src/corpus.py`: Manages documents and their versions.
-- `docs/base/`: Your starting document set.
-- `docs/updated/`: The files used to simulate a document update.
+```
+SHFA/
+├── README.md
+├── docs/
+│   ├── base/        (doc01..doc10)
+│   └── updated/     (doc03, doc07)
+└── src/
+    ├── __init__.py
+    ├── main.py
+    ├── models.py
+    ├── corpus.py
+    ├── cache.py
+    ├── retrieval.py
+    ├── generator.py
+    └── utils.py
+```
