@@ -1,0 +1,1 @@
+{"doc_id": "doc09", "text": "Containers package applications with their dependencies into isolated units. Docker provides container runtimes while Kubernetes orchestrates container deployment at scale."}

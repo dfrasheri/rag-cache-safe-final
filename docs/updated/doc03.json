@@ -1,0 +1,1 @@
+{"doc_id": "doc03", "text": "Modern API security requires a layered approach combining mutual TLS, JWT validation with short-lived tokens, request signing, and anomaly-based rate limiting. Zero-trust architectures treat every request as potentially hostile."}

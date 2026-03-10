@@ -1,0 +1,1 @@
+{"doc_id": "doc07", "text": "Advanced Python testing strategies include property-based testing with hypothesis, mutation testing to evaluate test suite quality, and contract testing for API boundaries. Coverage alone is insufficient as a quality metric."}

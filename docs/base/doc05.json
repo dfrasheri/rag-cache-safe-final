@@ -1,0 +1,1 @@
+{"doc_id": "doc05", "text": "Unit testing verifies individual components in isolation. Python testing frameworks like unittest and pytest provide assertions and fixtures for repeatable test execution."}

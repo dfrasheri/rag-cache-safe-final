@@ -1,0 +1,98 @@
+
+============================================================
+  STEP 1: Load base documents
+============================================================
+  Loaded 10 documents
+  corpus_version : 1
+    doc01 v1
+    doc02 v1
+    doc03 v1
+    doc04 v1
+    doc05 v1
+    doc06 v1
+    doc07 v1
+    doc08 v1
+    doc09 v1
+    doc10 v1
+
+============================================================
+  STEP 2: Query Q1 (first time) -> expect MISS / MISS
+============================================================
+
+--- Q1 first ---
+  query          : 'python testing API security'
+  filters        : {'domain': 'engineering', 'level': 'intermediate'}
+  corpus_version : 1
+  retrieval_key  : fc5408312376
+  RETRIEVAL      : MISS
+  context_hash   : ff41b52c4143
+  retrieved docs : 3
+    -> doc03 v1  score=0.5  snippet='API security involves authentication, authorization, and inp...'
+    -> doc05 v1  score=0.5  snippet='Unit testing verifies individual components in isolation. Py...'
+    -> doc07 v1  score=0.5  snippet='Python testing best practices include writing small focused ...'
+  response_key   : 4c9473eb12dd
+  RESPONSE       : MISS
+  PROMPT_V       : 1
+
+  answer:
+Answer (PROMPT_V=1): Based on 3 retrieved documents for query 'python testing API security':
+[doc03 v1]: API security involves authentication, authorization, and input validation. Common methods include OAuth tokens, API keys
+[doc05 v1]: Unit testing verifies individual components in isolation. Python testing frameworks like unittest and pytest provide ass
+[doc07 v1]: Python testing best practices include writing small focused tests, using descriptive names, and maintaining test indepen
+
+============================================================
+  STEP 3: Query Q1 (repeat) -> expect HIT / HIT
+============================================================
+
+--- Q1 repeat ---
+  query          : 'python testing API security'
+  filters        : {'domain': 'engineering', 'level': 'intermediate'}
+  corpus_version : 1
+  retrieval_key  : fc5408312376
+  RETRIEVAL      : HIT
+  context_hash   : ff41b52c4143
+  retrieved docs : 3
+    -> doc03 v1  score=0.5  snippet='API security involves authentication, authorization, and inp...'
+    -> doc05 v1  score=0.5  snippet='Unit testing verifies individual components in isolation. Py...'
+    -> doc07 v1  score=0.5  snippet='Python testing best practices include writing small focused ...'
+  response_key   : 4c9473eb12dd
+  RESPONSE       : HIT
+  PROMPT_V       : 1
+
+  answer:
+Answer (PROMPT_V=1): Based on 3 retrieved documents for query 'python testing API security':
+[doc03 v1]: API security involves authentication, authorization, and input validation. Common methods include OAuth tokens, API keys
+[doc05 v1]: Unit testing verifies individual components in isolation. Python testing frameworks like unittest and pytest provide ass
+[doc07 v1]: Python testing best practices include writing small focused tests, using descriptive names, and maintaining test indepen
+
+============================================================
+  STEP 4: Apply document updates
+============================================================
+  corpus_version : 2
+    doc03: v1 -> v2
+    doc07: v1 -> v2
+
+============================================================
+  STEP 5: Query Q1 (after update) -> expect MISS / MISS
+============================================================
+
+--- Q1 after update ---
+  query          : 'python testing API security'
+  filters        : {'domain': 'engineering', 'level': 'intermediate'}
+  corpus_version : 2
+  retrieval_key  : fc5408312376
+  RETRIEVAL      : MISS
+  context_hash   : ebc526cdec2a
+  retrieved docs : 3
+    -> doc07 v2  score=0.75  snippet='Advanced Python testing strategies include property-based te...'
+    -> doc03 v2  score=0.5  snippet='Modern API security requires a layered approach combining mu...'
+    -> doc05 v1  score=0.5  snippet='Unit testing verifies individual components in isolation. Py...'
+  response_key   : 8afbb0851b07
+  RESPONSE       : MISS
+  PROMPT_V       : 1
+
+  answer:
+Answer (PROMPT_V=1): Based on 3 retrieved documents for query 'python testing API security':
+[doc07 v2]: Advanced Python testing strategies include property-based testing with hypothesis, mutation testing to evaluate test sui
+[doc03 v2]: Modern API security requires a layered approach combining mutual TLS, JWT validation with short-lived tokens, request si
+[doc05 v1]: Unit testing verifies individual components in isolation. Python testing frameworks like unittest and pytest provide ass
